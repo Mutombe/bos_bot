@@ -95,7 +95,7 @@ def place_order(symbol, order_type, volume, price):
     return result
 
 
-symbol = "V75"
+symbol = "Volatility 100 Index"
 timeframe = mt5.TIMEFRAME_H4
 num_candles = 100
 volume = 0.2

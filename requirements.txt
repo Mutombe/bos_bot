@@ -3,7 +3,7 @@ click==8.1.7
 colorama==0.4.6
 MetaTrader5==5.0.4424
 mypy-extensions==1.0.0
-numpy==2.0.1
+numpy==1.26.4
 packaging==24.1
 pandas==2.2.2
 pathspec==0.12.1
