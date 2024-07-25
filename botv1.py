@@ -21,53 +21,61 @@ else:
     print("Failed to connect to account. Error code:", mt5.last_error())
     quit()
 
+
 def get_data(symbol, timeframe, num_candles):
     rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, num_candles)
     if rates is None:
         print(f"Failed to get rates for {symbol}")
         return None
     df = pd.DataFrame(rates)
-    df['time'] = pd.to_datetime(df['time'], unit='s')
+    df["time"] = pd.to_datetime(df["time"], unit="s")
     return df
+
 
 def detect_market_structure(df):
-    df['high_shift1'] = df['high'].shift(1)
-    df['low_shift1'] = df['low'].shift(1)
-    df['high_shift2'] = df['high'].shift(2)
-    df['low_shift2'] = df['low'].shift(2)
-    
-    df['HH'] = (df['high'] > df['high_shift1']) & (df['high_shift1'] > df['high_shift2'])
-    df['LL'] = (df['low'] < df['low_shift1']) & (df['low_shift1'] < df['low_shift2'])
-    
-    df['LH'] = (df['high'] < df['high_shift1']) & (df['high_shift1'] < df['high_shift2'])
-    df['HL'] = (df['low'] > df['low_shift1']) & (df['low_shift1'] > df['low_shift2'])
+    df["high_shift1"] = df["high"].shift(1)
+    df["low_shift1"] = df["low"].shift(1)
+    df["high_shift2"] = df["high"].shift(2)
+    df["low_shift2"] = df["low"].shift(2)
 
-    bullish_change = (df['LL'].shift(1) & df['HH'])
-    bearish_change = (df['HH'].shift(1) & df['LL'])
+    df["HH"] = (df["high"] > df["high_shift1"]) & (
+        df["high_shift1"] > df["high_shift2"]
+    )
+    df["LL"] = (df["low"] < df["low_shift1"]) & (df["low_shift1"] < df["low_shift2"])
 
-    df['bullish_change'] = bullish_change
-    df['bearish_change'] = bearish_change
+    df["LH"] = (df["high"] < df["high_shift1"]) & (
+        df["high_shift1"] < df["high_shift2"]
+    )
+    df["HL"] = (df["low"] > df["low_shift1"]) & (df["low_shift1"] > df["low_shift2"])
+
+    bullish_change = df["LL"].shift(1) & df["HH"]
+    bearish_change = df["HH"].shift(1) & df["LL"]
+
+    df["bullish_change"] = bullish_change
+    df["bearish_change"] = bearish_change
 
     return df
+
 
 def check_for_cms(symbol, timeframe, num_candles):
     df = get_data(symbol, timeframe, num_candles)
     if df is None or df.empty:
         return False, "none", None
-    
+
     df = detect_market_structure(df)
-    
+
     cms_detected = False
     direction = "none"
-    
-    if df['bullish_change'].iloc[-1]:
+
+    if df["bullish_change"].iloc[-1]:
         cms_detected = True
         direction = "bullish"
-    elif df['bearish_change'].iloc[-1]:
+    elif df["bearish_change"].iloc[-1]:
         cms_detected = True
         direction = "bearish"
-    
+
     return cms_detected, direction, df
+
 
 def place_order(symbol, order_type, volume, price):
     request = {
@@ -85,23 +93,29 @@ def place_order(symbol, order_type, volume, price):
     result = mt5.order_send(request)
     return result
 
+
 symbol = "V75"
 timeframe = mt5.TIMEFRAME_H4
 num_candles = 100
 volume = 0.2
 
-while True:
-    cms_detected, direction, df = check_for_cms(symbol, timeframe, num_candles)
-    if cms_detected:
-        print(f"Change in Market Structure detected: {direction}")
-        # Trade logic
-        if direction == "bullish":
-            place_order(symbol, mt5.ORDER_TYPE_BUY, volume)
-        elif direction == "bearish":
-             place_order(symbol, mt5.ORDER_TYPE_SELL, volume)
-    
-    time.sleep(60 * 60 * 4)  # Sleep for 4 hours before checking again
+try:
+    while True:
+        cms_detected, direction, df = check_for_cms(symbol, timeframe, num_candles)
+        if cms_detected:
+            print(f"Change in Market Structure detected: {direction}")
+            # Trade logic
+            if direction == "bullish":
+                place_order(symbol, mt5.ORDER_TYPE_BUY, volume)
+            elif direction == "bearish":
+                place_order(symbol, mt5.ORDER_TYPE_SELL, volume)
 
-mt5.shutdown()
+        time.sleep(60 * 60 * 4)  # Sleep for 4 hours before checking again
 
-
+except KeyboardInterrupt:
+    print("Script interrupted by user")
+except Exception as e:
+    print(f"An error occurred: {e}")
+finally:
+    mt5.shutdown()
+    print("MT5 shutdown")
