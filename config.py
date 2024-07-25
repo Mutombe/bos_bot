@@ -1,0 +1,3 @@
+ACCOUNT = 31529305
+PASSWORD = 'Simbarashe@1700'
+SERVER = "Deriv-Demo"

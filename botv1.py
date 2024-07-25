@@ -4,15 +4,16 @@
 import MetaTrader5 as mt5
 import pandas as pd
 import time
+from config import ACCOUNT, PASSWORD, SERVER
 
 # Initialize and connect to MT5
 if not mt5.initialize():
     print("initialize() failed, error code =", mt5.last_error())
     quit()
 
-account = 123456  # replace with your account number
-password = "your_password"
-server = "Deriv-Server"  # replace with your server
+account = ACCOUNT
+password = PASSWORD
+server = SERVER
 
 authorized = mt5.login(account, password, server)
 if authorized:
