@@ -10,6 +10,8 @@ from config import ACCOUNT, PASSWORD, SERVER
 if not mt5.initialize():
     print("initialize() failed, error code =", mt5.last_error())
     quit()
+else:
+    print("Initializing...")
 
 account = ACCOUNT
 password = PASSWORD
@@ -28,6 +30,8 @@ def get_data(symbol, timeframe, num_candles):
     if rates is None:
         print(f"Failed to get rates for {symbol}")
         return None
+    else:
+        print(f"Got the rates for {symbol}")
     df = pd.DataFrame(rates)
     df["time"] = pd.to_datetime(df["time"], unit="s")
     return df
@@ -78,7 +82,14 @@ def check_for_cms(symbol, timeframe, num_candles):
     return cms_detected, direction, df
 
 
-def place_order(symbol, order_type, volume, price):
+def place_order(symbol, order_type, volume, price=None):
+    if price is None:
+        price = (
+            mt5.symbol_info_tick(symbol).ask
+            if order_type == mt5.ORDER_TYPE_BUY
+            else mt5.symbol_info_tick(symbol).bid
+        )
+
     request = {
         "action": mt5.TRADE_ACTION_DEAL,
         "symbol": symbol,
@@ -95,21 +106,34 @@ def place_order(symbol, order_type, volume, price):
     return result
 
 
-symbol = "Volatility 100 Index"
-timeframe = mt5.TIMEFRAME_H4
+# List of symbols to analyze
+symbols = [
+    "Volatility 10 Index",
+    "Volatility 25 Index",
+    "Volatility 75 Index",
+    "Volatility 100 Index",
+    "Crash 1000 Index",
+    "Crash 500 Index",
+    "Crash 300 Index",
+    "Boom 1000 Index",
+    "Boom 500 Index",
+    "Boom 300 Index",
+]
+timeframe = mt5.TIMEFRAME_M15
 num_candles = 100
 volume = 0.2
 
 try:
     while True:
-        cms_detected, direction, df = check_for_cms(symbol, timeframe, num_candles)
-        if cms_detected:
-            print(f"Change in Market Structure detected: {direction}")
-            # Trade logic
-            if direction == "bullish":
-                place_order(symbol, mt5.ORDER_TYPE_BUY, volume)
-            elif direction == "bearish":
-                place_order(symbol, mt5.ORDER_TYPE_SELL, volume)
+        for symbol in symbols:
+            cms_detected, direction, df = check_for_cms(symbol, timeframe, num_candles)
+            if cms_detected:
+                print(f"Change in Market Structure detected for {symbol}: {direction}")
+                # Trade logic
+                if direction == "bullish":
+                    place_order(symbol, mt5.ORDER_TYPE_BUY, volume)
+                elif direction == "bearish":
+                    place_order(symbol, mt5.ORDER_TYPE_SELL, volume)
 
         time.sleep(60 * 60 * 4)  # Sleep for 4 hours before checking again
 
