@@ -1,21 +1,30 @@
 # Copyright 2024, MetaQuotes Ltd.
 # https://www.mql5.com
 
+import datetime
 import MetaTrader5 as mt5
 import pandas as pd
 import time
 from config import ACCOUNT, PASSWORD, SERVER
 
 # Initialize and connect to MT5
+print("Initializing MT5...")
+time.sleep(1)
+
 if not mt5.initialize():
     print("initialize() failed, error code =", mt5.last_error())
     quit()
 else:
     print("Initializing...")
 
+time.sleep(1)
+
 account = ACCOUNT
 password = PASSWORD
 server = SERVER
+
+print("Logging into account...")
+time.sleep(1)
 
 authorized = mt5.login(account, password, server)
 if authorized:
@@ -24,20 +33,25 @@ else:
     print("Failed to connect to account. Error code:", mt5.last_error())
     quit()
 
+time.sleep(1)
 
 def get_data(symbol, timeframe, num_candles):
+    print(f"Retrieving data for {symbol} with timeframe {timeframe} and {num_candles} candles...")
+    time.sleep(1)
     rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, num_candles)
     if rates is None:
         print(f"Failed to get rates for {symbol}")
         return None
     else:
-        print(f"Got the rates for {symbol}")
+        print(f"Successfully retrieved rates for {symbol}")
     df = pd.DataFrame(rates)
     df["time"] = pd.to_datetime(df["time"], unit="s")
     return df
 
 
 def detect_market_structure(df):
+    print("Detecting market structure...")
+    time.sleep(1)
     df["high_shift1"] = df["high"].shift(1)
     df["low_shift1"] = df["low"].shift(1)
     df["high_shift2"] = df["high"].shift(2)
@@ -59,10 +73,15 @@ def detect_market_structure(df):
     df["bullish_change"] = bullish_change
     df["bearish_change"] = bearish_change
 
+    print("Market structure detected:")
+    print(df[["time", "high", "low", "bullish_change", "bearish_change"]].tail())  # Print the relevant columns
+
     return df
 
 
 def check_for_cms(symbol, timeframe, num_candles):
+    print(f"Checking for Change in Market Structure for {symbol}...")
+    time.sleep(1)
     df = get_data(symbol, timeframe, num_candles)
     if df is None or df.empty:
         return False, "none", None
@@ -78,7 +97,7 @@ def check_for_cms(symbol, timeframe, num_candles):
     elif df["bearish_change"].iloc[-1]:
         cms_detected = True
         direction = "bearish"
-
+    print(f"CMS detected: {cms_detected}, direction: {direction}")
     return cms_detected, direction, df
 
 
@@ -89,7 +108,9 @@ def place_order(symbol, order_type, volume, price=None):
             if order_type == mt5.ORDER_TYPE_BUY
             else mt5.symbol_info_tick(symbol).bid
         )
-
+   
+    print(f"\n[{datetime.datetime.now()}] Placing order: symbol={symbol}, type={order_type}, volume={volume}, price={price}")
+    time.sleep(1)
     request = {
         "action": mt5.TRADE_ACTION_DEAL,
         "symbol": symbol,
@@ -135,7 +156,8 @@ try:
                 elif direction == "bearish":
                     place_order(symbol, mt5.ORDER_TYPE_SELL, volume)
 
-        time.sleep(60 * 60 * 4)  # Sleep for 4 hours before checking again
+        print(f"Sleeping for 15 minutes...")
+        time.sleep(60 * 15)  # Sleep for 15 minutes before checking again
 
 except KeyboardInterrupt:
     print("Script interrupted by user")
