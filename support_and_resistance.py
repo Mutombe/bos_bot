@@ -1,6 +1,5 @@
 # Identify support and resistance levels
 
-
 def identify_support_resistance(data):
     support_levels = []
     resistance_levels = []

@@ -1,6 +1,5 @@
 import MetaTrader5 as mt5
 
-
 def adjust_stop_loss(order, new_stop_loss):
     """
     Adjust the stop loss of an existing order.

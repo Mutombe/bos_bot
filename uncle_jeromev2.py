@@ -1,56 +1,20 @@
 import MetaTrader5 as mt5
-import pandas as pd
 import time
 import logging
+from cms import check_for_cms
 from sma_trend import detect_trend
 from dynamic_size import calculate_position_size
 from support_and_resistance import identify_support_resistance
-from config import ACCOUNT, PASSWORD, SERVER
+from historical_data import get_data
+import config
 from trailing import trail_stop_loss
+from initializing import initialize_mt5
 
 logging.basicConfig(
     filename="trading_bot.log", level=logging.INFO, format="%(asctime)s %(message)s"
 )
 
 open_positions = {}
-
-
-# Initialize connection to MetaTrader 5
-def initialize_mt5(account, password, server):
-    mt5.initialize()
-    if mt5.initialize():
-        print("Initializing...")
-    else:
-        print("Failed to initialize MetaTrader 5")
-    time.sleep(1)
-    authorized = mt5.login(account, password, server)
-    if not authorized:
-        print(
-            f"Failed to connect to account #{account}, error code: {mt5.last_error()}"
-        )
-        logging.error(
-            f"Failed to connect to account #{account}, error code: {mt5.last_error()}"
-        )
-    else:
-        logging.info(f"Connected to account #{account}")
-
-
-# Fetch historical data
-def get_historical_data(symbol, timeframe, num_candles):
-    print(
-        f"Retrieving data for {symbol} with timeframe {timeframe} and {num_candles} candles..."
-    )
-    time.sleep(1)
-    rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, num_candles)
-    if rates is None:
-        print(f"Failed to get rates for {symbol}")
-        return None
-    else:
-        print(f"Successfully retrieved rates for {symbol}")
-    df = pd.DataFrame(rates)
-    df["time"] = pd.to_datetime(df["time"], unit="s")
-    return df
-
 
 # Check for market structure break
 def check_market_structure_break(
@@ -63,9 +27,9 @@ def check_market_structure_break(
         print("Bullish break detected")
         return True
     elif trend == "downtrend" and current_price < support_levels[-1]:
-        print("Bearing break detected")
+        print("Bearish break detected")
         return True
-    print("No conclusive market signal")
+    print("No conclusive market signal"'\n')
     return False
 
 
@@ -83,7 +47,7 @@ def place_order(symbol, order_type, volume, price, sl, tp):
         "magic": 234000,
         "comment": "Trend Following Strategy",
         "type_time": mt5.ORDER_TIME_GTC,
-        "type_filling": mt5.ORDER_FILLING_IOC,
+        "type_filling": mt5.ORDER_FILLING_FOK,
     }
     result = mt5.order_send(request)
     if result.retcode != mt5.TRADE_RETCODE_DONE:
@@ -94,7 +58,8 @@ def place_order(symbol, order_type, volume, price, sl, tp):
         logging.info(f"Order placement result: {result}")
         print(f"Order placement result {result}")
         time.sleep(1)
-    print(f"Order placement successful...")
+        print(f"Order placement successful...")
+
     return result
 
 
@@ -104,7 +69,7 @@ def strategy(symbols, timeframe, account, password, server):
     initialize_mt5(account, password, server)
 
     for symbol in symbols:
-        data = get_historical_data(symbol, timeframe, 1000)
+        data = get_data(symbol, timeframe, config.NUMBER_OF_CANDLES)
         trend = detect_trend(data)
         support_levels, resistance_levels = identify_support_resistance(data)
 
@@ -117,7 +82,12 @@ def strategy(symbols, timeframe, account, password, server):
             trend, support_levels, resistance_levels, current_price
         )
 
-        if market_structure_break:
+        cms_detected, direction, df = check_for_cms(
+            symbol, timeframe, config.NUMBER_OF_CANDLES
+        )
+
+        if market_structure_break and cms_detected:
+            print(f"Confirmation for change in Market Structure detected for {symbol}: {direction}")
             account_info = mt5.account_info()
             account_balance = account_info.balance
             risk_per_trade = 0.01  # Risk 1% of account per trade
@@ -129,7 +99,7 @@ def strategy(symbols, timeframe, account, password, server):
                 account_balance, risk_per_trade, stop_loss_pips, pip_value
             )
 
-            if trend == "uptrend":
+            if trend == "uptrend" and direction == "Bullish":
                 tp = resistance_levels[-1] + (
                     resistance_levels[-1] - support_levels[-1]
                 )  # TP calculation
@@ -148,7 +118,7 @@ def strategy(symbols, timeframe, account, password, server):
                         f"Initial buy order placed for {symbol} with a Lot Size of `{volume}`, SL of {sl} & TP of {tp}"
                     )
                     while True:
-                        data = get_historical_data(symbol, timeframe, 1000)
+                        data = get_data(symbol, timeframe, config.NUMBER_OF_CANDLES)
                         trend = detect_trend(data)
                         if trend != "uptrend":
                             break
@@ -174,7 +144,7 @@ def strategy(symbols, timeframe, account, password, server):
                                 )
                     print(f"Adjusting trailing stop loss for {symbol}.")
                     trail_stop_loss(pullback_entry, trail_amount)
-            elif trend == "downtrend":
+            elif trend == "downtrend" and direction == "Bearish":
                 tp = support_levels[-1] - (
                     resistance_levels[-1] - support_levels[-1]
                 )  # TP calculation
@@ -193,7 +163,7 @@ def strategy(symbols, timeframe, account, password, server):
                         f"Initial sell order placed for {symbol} with a Lot Size of `{volume}`, SL of {sl} & TP of {tp}"
                     )
                     while True:
-                        data = get_historical_data(symbol, timeframe, 1000)
+                        data = get_data(symbol, timeframe, config.NUMBER_OF_CANDLES)
                         trend = detect_trend(data)
                         if trend != "downtrend":
                             break
@@ -219,25 +189,8 @@ def strategy(symbols, timeframe, account, password, server):
                                 )
         time.sleep(60)
 
-
 if __name__ == "__main__":
-    symbols = [
-        "Volatility 10 Index",
-        "Volatility 25 Index",
-        "Volatility 75 Index",
-        "Volatility 100 Index",
-        "Crash 1000 Index",
-        "Crash 500 Index",
-        "Crash 300 Index",
-        "Boom 1000 Index",
-        "Boom 500 Index",
-        "Boom 300 Index",
-    ]
-    timeframes = [
-        mt5.TIMEFRAME_M30,
-        mt5.TIMEFRAME_H1,
-        mt5.TIMEFRAME_H4,
-        mt5.TIMEFRAME_D1,
-    ]
-    for timeframe in timeframes:
-        strategy(symbols, timeframe, ACCOUNT, PASSWORD, SERVER)
+    for timeframe in config.TIMEFRAMES:
+        strategy(
+            config.SYMBOLS, timeframe, config.ACCOUNT, config.PASSWORD, config.SERVER
+        )
